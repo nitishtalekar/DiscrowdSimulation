@@ -65,7 +65,7 @@ function validateMessageSecurity(message) {
   };
 }
 
-// Store active simulations (in production, you'd use a database)
+// Store active simulations
 const activeSimulations = new Map();
 
 // Create an express app
