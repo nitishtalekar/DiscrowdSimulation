@@ -21,6 +21,9 @@ import {
   formatCompletionSummary
 } from './simulation_engine.js';
 
+
+const MODEL = "gemma3:1b"
+
 // Helper function: Check for XSS and injection attempts
 function validateMessageSecurity(message) {
   const errors = [];
@@ -185,8 +188,6 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         });
       }
 
-      // ===== PHASE 3: CREATE SIMULATION =====
-
       // Send initial acknowledgment
       res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -241,36 +242,36 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 
              console.log(`Created thread for ${location.name}: ${threadData.id}`);
 
-           } catch (threadErr) {
-             console.error(`Error creating thread for ${location.name}:`, threadErr);
-             throw threadErr;
-           }
-         }
+          } catch (threadErr) {
+            console.error(`Error creating thread for ${location.name}:`, threadErr);
+            throw threadErr;
+          }
+        }
 
-         // Update simulation status
-         updateSimulationStatus(simulation, 'ready');
+        // Update simulation status
+        updateSimulationStatus(simulation, 'ready');
 
-         // Update the main message with summary and thread links
-         const summary = formatSimulationSummary(simulation);
+        // Update the main message with summary and thread links
+        const summary = formatSimulationSummary(simulation);
 
-         // Build thread links
-         const threadLinks = simulation.locations.map(loc =>
-           `• <#${loc.threadId}> - ${loc.bots.length} residents`
-         ).join('\n');
+        // Build thread links
+        const threadLinks = simulation.locations.map(loc =>
+          `• <#${loc.threadId}> - ${loc.bots.length} residents`
+        ).join('\n');
 
-         let finalMessage = `${summary}\n\n**Location Threads:**\n${threadLinks}\n\n` +
-                             `✅ Setup complete! Starting emergency response in Phase 4...`;
+        let finalMessage = `${summary}\n\n**Location Threads:**\n${threadLinks}\n\n` +
+                            `✅ Setup complete! Starting emergency response...`;
 
-         await DiscordRequest(getMessageEndpoint, {
-           method: 'PATCH',
-           body: {
-             content: finalMessage,
-           },
-         });
+        await DiscordRequest(getMessageEndpoint, {
+          method: 'PATCH',
+          body: {
+            content: finalMessage,
+          },
+        });
 
-         console.log(`Simulation ${simulation.id} setup complete`);
+        console.log(`Simulation ${simulation.id} setup complete`);
 
-         console.log(`Starting Phase 4: Emergency alert and initial responses`);
+        console.log(`Starting Phase 4: Emergency alert and initial responses`);
 
        // Update simulation status
        updateSimulationStatus(simulation, 'running');
@@ -309,7 +310,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                  method: 'POST',
                  headers: { 'Content-Type': 'application/json' },
                  body: JSON.stringify({
-                   model: "gemma3:1b",
+                   model: MODEL,
                    prompt: botPrompt,
                    system: bot.systemPrompt,
                    stream: false,
@@ -352,32 +353,32 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
          }
        }
 
-       // Update main message with Phase 4 completion
+       // Update main message with initial response completion
         const stats = getSimulationStats(simulation);
         const statsText = simulation.locations.map(loc =>
           `• ${loc.emoji} **${loc.name}**: ${loc.messageCount} messages`
         ).join('\n');
 
-        const phase4CompleteMessage = `${summary}\n\n**Location Threads:**\n${threadLinks}\n\n` +
+        const initialResponseCompleteMessage = `${summary}\n\n**Location Threads:**\n${threadLinks}\n\n` +
                                      `✅ Emergency alert posted to all locations!\n` +
                                      `✅ All ${stats.totalBots} residents have responded!\n\n` +
                                      `**Current Status:**\n${statsText}\n\n` +
-                                     `⏳ Starting conversation rounds (Phase 5)...`;
+                                     `⏳ Starting conversation rounds...`;
 
         await DiscordRequest(getMessageEndpoint, {
           method: 'PATCH',
           body: {
-            content: phase4CompleteMessage,
+            content: initialResponseCompleteMessage,
           },
         });
 
         const responses = simulation.stats.messagesPosted - simulation.locations.length;
 
-        console.log(`Phase 4 complete! Total messages: ${responses}`);
+        console.log(`Initial Responses complete! Total messages: ${responses}`);
 
-       // ===== PHASE 5: CONVERSATION ROUNDS =====
+       // ===== CONVERSATION ROUNDS =====
 
-      console.log(`Starting Phase 5: Conversation rounds (${roundCount} rounds)`);
+      console.log(`Starting Conversation rounds (${roundCount} rounds)`);
 
       // Run conversation rounds
       for (let round = 1; round <= roundCount; round++) {
@@ -427,7 +428,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    model: "gemma3:1b",
+                    model: MODEL,
                     prompt: contextPrompt,
                     system: bot.systemPrompt,
                     stream: false,
@@ -499,7 +500,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
          }
        }
 
-       // ===== PHASE 6: COMPLETION =====
+       // ===== Simulation COMPLETION =====
 
        console.log(`\nAll rounds complete! Finalizing simulation...`);
 

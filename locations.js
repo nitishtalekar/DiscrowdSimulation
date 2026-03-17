@@ -61,7 +61,7 @@ export function getRandomLocations(count) {
   return shuffled.slice(0, count);
 }
 
-// Helper function to get total capacity range
+// Helper function to get total capacity range for a given set of locations
 export function getTotalCapacity(locations) {
   return locations.reduce((acc, loc) => ({
     min: acc.min + loc.capacity.min,

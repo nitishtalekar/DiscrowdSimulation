@@ -26,7 +26,7 @@ const SIMULATE_COMMAND = {
         { name: '4 locations', value: 4 },
         { name: '5 locations', value: 5 },
         { name: '6 locations', value: 6 },
-      ]//if you add more locations to locations.js, add additional choices. must have atleast enough capacity for every bot to be placed
+      ]//if you add more locations to locations.js, add additional choices. must have at least enough capacity for every bot to be placed
     },
     {
       type: 4, // Integer
@@ -51,6 +51,7 @@ const SIMULATE_COMMAND = {
   integration_types: [0, 1],
   contexts: [0, 1, 2],
 };
+// any new commands need to be added to this list
 const ALL_COMMANDS = [TEST_COMMAND, SIMULATE_COMMAND];
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);

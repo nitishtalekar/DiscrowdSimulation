@@ -1,6 +1,5 @@
 // Town Population - Manteo, NC Residents
-// Converted from agents.py with location affinity weights
-// Author: Mac Gagne
+
 
 const FROM = "You are a resident of Manteo, North Carolina.";
 const RESPONSE_DETAIL = "Keep responses relatively concise (2-4 sentences) and at most 2000 characters."

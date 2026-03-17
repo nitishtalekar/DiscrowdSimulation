@@ -37,7 +37,7 @@ export function createSimulation(locationCount, roundCount, emergencyMessage) {
     );
   }
 
-  // Assign bots to locations using Phase 1 allocator
+  // Assign bots to locations
   const assignments = assignBotsToLocations(TOWN_RESIDENTS, selectedLocations);
 
   // Validate assignments
