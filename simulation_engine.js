@@ -62,7 +62,8 @@ export function createSimulation(locationCount, roundCount, emergencyMessage) {
       threadId: null, // Will be filled when thread is created
       bots: assignments[location.name].bots,
       messageCount: 0,
-      currentRound: 0
+      currentRound: 0,
+      transcript: null
     })),
     stats: {
       totalBots: botCount,
@@ -200,7 +201,8 @@ export function formatSimulationSummary(simulation) {
     `• ${loc.emoji} **${loc.name}** (${loc.bots.length} residents)`
   ).join('\n');
 
-  return `🚨 **EMERGENCY SIMULATION**\n\n` +
+  return `🚨 **EMERGENCY SIMULATION**\n` +
+         `Simulation ID: ${simulation.id}\n\n`
          `**Emergency:** ${simulation.emergencyMessage}\n\n` +
          `**Locations (${simulation.locations.length}):**\n${locationList}\n\n` +
          `**Conversation Rounds:** ${simulation.roundCount}\n` +

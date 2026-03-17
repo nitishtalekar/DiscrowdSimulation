@@ -20,6 +20,7 @@ import {
   setLocationRound,
   formatCompletionSummary
 } from './simulation_engine.js';
+import fs from 'fs/promises';
 
 // Ollama model
 const MODEL = "gemma3:1b";
@@ -72,6 +73,26 @@ function validateMessageSecurity(message) {
     valid: errors.length === 0,
     errors
   };
+}
+
+
+async function createMyFolder(folderPath) {
+  try {
+    await fs.mkdir(folderPath, { recursive: true });
+    console.log(`Directory created successfully at: ${folderPath}`);
+  } catch (err) {
+    // Handle errors, though with 'recursive: true', most mkdir errors are avoided
+    console.error('An error occurred:', err);
+  }
+}
+
+async function createFileAsync(filename, content) {
+  try {
+    await fs.writeFile(filename, content); // This line pauses the function until the file is written
+    console.log(`File "${filename}" created successfully`);
+  } catch (err) {
+    console.error('Error writing file:', err);
+  }
 }
 
 // Store active simulations
@@ -277,6 +298,9 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 
         console.log(`Simulation ${simulation.id} setup complete`);
 
+        // create folder for simulation transcript
+        createMyFolder(`./Transcripts/${simulation.id}`);
+
         console.log(`Beginning Simulation: Emergency alert and initial responses`);
 
         // Update simulation status
@@ -299,6 +323,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
               },
             });
 
+            location.transcript = location.transcript + `🚨 **EMERGENCY ALERT** 🚨\n\n${emergencyMessage}\n\n━━━━━━━━━━━━━━━━━━━━━━━━\n**Residents at ${location.name}:**\n`;
             incrementMessageCount(simulation, location.name, 1);
             console.log(`Posted emergency alert to ${location.name}`);
 
@@ -334,6 +359,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                   },
                 });
 
+                location.transcript = location.transcript + `**${bot.emoji} ${bot.name}**\n${responseText}\n`;
                 incrementMessageCount(simulation, location.name, 1);
                 console.log(`  ✓ ${bot.name} responded`);
 
@@ -453,6 +479,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                     },
                   });
 
+                  location.transcript = location.transcript + `**${bot.emoji} ${bot.name}**\n${responseText}\n`;
                   incrementMessageCount(simulation, location.name, 1);
                   console.log(`  ✓ ${bot.name} (Round ${round})`);
 
@@ -572,6 +599,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                   },
                 });
 
+                location.transcript = location.transcript + `**${bot.emoji} ${bot.name}**\n${responseText}\n`;
                 incrementMessageCount(simulation, location.name, 1);
                 console.log(`  ✓ ${bot.name} (Final Round)`);
 
@@ -584,6 +612,8 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
             }
 
             console.log(`✓ Completed Final Round at ${location.name}`);
+            location.transcript = location.transcript + `======TRANSCRIPT COMPLETE======`;
+            createFileAsync(`./Transcripts/${simulation.id}/${location.name}`,`${location.transcript}`);
 
           } catch (locationErr) {
             console.error(`Error in Final Round at ${location.name}:`, locationErr);
@@ -620,6 +650,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 
         // Mark simulation as complete
         updateSimulationStatus(simulation, 'complete');
+
 
         // Build final completion summary
         const completionSummary = formatCompletionSummary(simulation);
