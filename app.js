@@ -323,7 +323,8 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
               },
             });
 
-            location.transcript = location.transcript + `🚨 **EMERGENCY ALERT** 🚨\n\n${emergencyMessage}\n\n━━━━━━━━━━━━━━━━━━━━━━━━\n**Residents at ${location.name}:**\n`;
+            location.transcript = `=====Transcript Begin=====\n🚨 EMERGENCY ALERT 🚨: ${emergencyMessage}\n\n━━━━━━━━━━━━━━━━━━━━━━━━\n=====Initial Response=====\n━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+
             incrementMessageCount(simulation, location.name, 1);
             console.log(`Posted emergency alert to ${location.name}`);
 
@@ -359,7 +360,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                   },
                 });
 
-                location.transcript = location.transcript + `**${bot.emoji} ${bot.name}**\n${responseText}\n`;
+                location.transcript = location.transcript + `${bot.emoji} ${bot.name}\n${responseText}\n\n`;
                 incrementMessageCount(simulation, location.name, 1);
                 console.log(`  ✓ ${bot.name} responded`);
 
@@ -422,6 +423,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
             const bots = location.bots;
 
             console.log(`Round ${round} at ${location.name}...`);
+            location.transcript = location.transcript + `\n=====Round Responses=====\n\n━━━━━━━━━━━━━━━━━━━━━━━━\n`;
 
             try {
               // Fetch recent messages from this thread to build context
@@ -479,7 +481,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                     },
                   });
 
-                  location.transcript = location.transcript + `**${bot.emoji} ${bot.name}**\n${responseText}\n`;
+                  location.transcript = location.transcript + `${bot.emoji} ${bot.name}\n${responseText}\n\n`;
                   incrementMessageCount(simulation, location.name, 1);
                   console.log(`  ✓ ${bot.name} (Round ${round})`);
 
@@ -542,6 +544,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
           const bots = location.bots;
 
           console.log(`Final Response at ${location.name}...`);
+          location.transcript = location.transcript + `\n=====Final Response=====\n\n━━━━━━━━━━━━━━━━━━━━━━━━\n`;
 
           try {
             // Fetch recent messages from this thread to build context
@@ -599,7 +602,8 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                   },
                 });
 
-                location.transcript = location.transcript + `**${bot.emoji} ${bot.name}**\n${responseText}\n`;
+
+                location.transcript = location.transcript + `${bot.emoji} ${bot.name}\n${responseText}\n`;
                 incrementMessageCount(simulation, location.name, 1);
                 console.log(`  ✓ ${bot.name} (Final Round)`);
 

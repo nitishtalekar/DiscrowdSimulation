@@ -202,7 +202,7 @@ export function formatSimulationSummary(simulation) {
   ).join('\n');
 
   return `🚨 **EMERGENCY SIMULATION**\n` +
-         `Simulation ID: ${simulation.id}\n\n`
+         `Simulation ID: ${simulation.id}\n\n` +
          `**Emergency:** ${simulation.emergencyMessage}\n\n` +
          `**Locations (${simulation.locations.length}):**\n${locationList}\n\n` +
          `**Conversation Rounds:** ${simulation.roundCount}\n` +
