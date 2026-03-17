@@ -21,8 +21,14 @@ import {
   formatCompletionSummary
 } from './simulation_engine.js';
 
-
+// Ollama model
 const MODEL = "gemma3:1b";
+// Round Response prompt
+const ROUND_PROMPT = `Respond naturally to what others have said. Engage with their concerns and continue the discussion. Response must be at most 2000 characters. Dont give a preface like -ok heres my response...-, just respond directly like you are in the conversation.`;
+// Final Response prompt
+const FINAL_PROMPT = `By having conversations with others, you’ve been able to get a better idea of how other people are responding and understanding the current emergency weather situation. In 300 characters or less, please explain your current understanding of the emergency weather situation following these discussions, taking into account what you’ve learned from other’s opinions of the topic that you agree with. Dont give a preface like -ok heres my response...-, just respond directly like you are in the conversation.`
+// localhost endpoint for sending messages
+const LOCAL_ENDPOINT = 'http://localhost:11434/api/generate';
 
 // Helper function: Check for XSS and injection attempts
 function validateMessageSecurity(message) {
@@ -271,7 +277,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 
         console.log(`Simulation ${simulation.id} setup complete`);
 
-        console.log(`Starting Phase 4: Emergency alert and initial responses`);
+        console.log(`Beginning Simulation: Emergency alert and initial responses`);
 
         // Update simulation status
         updateSimulationStatus(simulation, 'running');
@@ -306,7 +312,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                 const botPrompt = `You are in ${location.name} when you receive this emergency alert:\n\n"${emergencyMessage}"\n\nRespond with your immediate reaction and thoughts about what to do. Response must be at most 2000 characters.`;
 
                 // Call Ollama
-                const ollamaResponse = await fetch('http://localhost:11434/api/generate', {
+                const ollamaResponse = await fetch(LOCAL_ENDPOINT, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
@@ -421,10 +427,10 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
               for (const bot of bots) {
                 try {
                   // Build prompt with conversation context
-                  const contextPrompt = `You are at ${location.name} during an emergency. Here's the recent conversation:\n\n${conversationContext}\n\nRespond naturally to what others have said. Engage with their concerns and continue the discussion. Response must be at most 2000 characters. Dont give a preface like -ok heres my response...-, just respond directly like you are in the conversation.`;
+                  const contextPrompt = `You are at ${location.name} during an emergency. Here's the recent conversation:\n\n${conversationContext}\n\n${ROUND_PROMPT}`;
 
                   // Call Ollama
-                  const ollamaResponse = await fetch('http://localhost:11434/api/generate', {
+                  const ollamaResponse = await fetch(LOCAL_ENDPOINT, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -483,7 +489,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                                       `**Total Messages:** ${simulation.stats.messagesPosted}\n\n` +
                                       (round < roundCount
                                         ? `⏳ Starting round ${round + 1}...`
-                                        : `⏳ Finalizing simulation...`);
+                                        : `⏳ Beginning Final Round...`);
 
           await DiscordRequest(getMessageEndpoint, {
             method: 'PATCH',
@@ -499,6 +505,114 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
             await new Promise(resolve => setTimeout(resolve, 1000));
           }
         }
+
+        //========  Final Response ===============
+        console.log(`\n==Starting Final Round==`);
+
+        // Process each location in this round
+        for (const location of simulation.locations) {
+          const threadId = location.threadId;
+          const bots = location.bots;
+
+          console.log(`Final Response at ${location.name}...`);
+
+          try {
+            // Fetch recent messages from this thread to build context
+            const messagesEndpoint = `channels/${threadId}/messages?limit=20`;
+            const messagesResponse = await DiscordRequest(messagesEndpoint, { method: 'GET' });
+            const messages = await messagesResponse.json();
+
+            // Reverse so oldest first
+            const recentMessages = messages.reverse();
+
+            // Build conversation context (last 10 messages)
+            const contextMessages = recentMessages.slice(-10);
+            const conversationContext = contextMessages
+              .map(msg => {
+                // Extract bot name and message
+                const content = msg.content;
+                if (content.includes('**') && !content.includes('EMERGENCY ALERT')) {
+                  return content;
+                }
+                return null;
+              })
+              .filter(Boolean)
+              .join('\n\n');
+
+            // Small delay before starting bot responses
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Have each bot respond to the conversation
+            for (const bot of bots) {
+              try {
+                // Build prompt with conversation context
+                const contextPrompt = `You are at ${location.name} during an emergency. Here's the recent conversation:\n\n${conversationContext}\n\n${FINAL_PROMPT}`;
+
+                // Call Ollama
+                const ollamaResponse = await fetch(LOCAL_ENDPOINT, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    model: MODEL,
+                    prompt: contextPrompt,
+                    system: bot.systemPrompt,
+                    stream: false,
+                  }),
+                });
+
+                const ollamaData = await ollamaResponse.json();
+                const responseText = ollamaData.response || 'No response';
+
+                // Post bot's response to thread
+                const messageEndpoint = `channels/${threadId}/messages`;
+                await DiscordRequest(messageEndpoint, {
+                  method: 'POST',
+                  body: {
+                    content: `**${bot.emoji} ${bot.name}**\n${responseText}`,
+                  },
+                });
+
+                incrementMessageCount(simulation, location.name, 1);
+                console.log(`  ✓ ${bot.name} (Final Round)`);
+
+                // Delay between bot responses
+                await new Promise(resolve => setTimeout(resolve, 300));
+
+              } catch (botErr) {
+                console.error(`  ✗ Error with ${bot.name} in final round:`, botErr.message);
+              }
+            }
+
+            console.log(`✓ Completed Final Round at ${location.name}`);
+
+          } catch (locationErr) {
+            console.error(`Error in Final Round at ${location.name}:`, locationErr);
+          }
+        }
+
+        // Update main message with round progress
+        const roundStats = simulation.locations.map(loc =>
+          `• ${loc.emoji} **${loc.name}**: ${loc.messageCount} messages (Final Round)`
+        ).join('\n');
+
+        const roundProgressMessage = `${summary}\n\n**Location Threads:**\n${threadLinks}\n\n` +
+                                    `✅ Emergency alert posted!\n` +
+                                    `✅ Initial responses complete!\n` +
+                                    `✅ Conversation Round Completed!\n` +
+                                    `🔄 **Final Round in progress!**\n\n` +
+                                    `**Current Status:**\n${roundStats}\n\n` +
+                                    `**Total Messages:** ${simulation.stats.messagesPosted}\n\n` +
+                                    `⏳ Finalizing Simulation...`;
+
+        await DiscordRequest(getMessageEndpoint, {
+          method: 'PATCH',
+          body: {
+            content: roundProgressMessage,
+          },
+        });
+
+        console.log(`✓ Final Round complete! Total messages: ${simulation.stats.messagesPosted}`);
+
 
         // ===== Simulation COMPLETION =====
 
