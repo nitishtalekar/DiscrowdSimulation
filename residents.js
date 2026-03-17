@@ -2,7 +2,7 @@
 
 
 const FROM = "You are a resident of Manteo, North Carolina.";
-const RESPONSE_DETAIL = "Keep responses relatively concise (2-4 sentences) and at most 2000 characters."
+const RESPONSE_DETAIL = "Keep responses relatively concise (2-4 sentences) and at most 2000 characters.";
 
 export const TOWN_RESIDENTS = [
   // AGENT 1: Elderly with high medical needs, wheelchair bound
