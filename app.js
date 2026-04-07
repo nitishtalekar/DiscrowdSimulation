@@ -360,7 +360,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                   },
                 });
 
-                location.transcript = location.transcript + `${bot.emoji} ${bot.name}\n${responseText}\n\n`;
+                location.transcript = location.transcript + `^* Name:${bot.name} Personality:${bot.personalityCode}\n${responseText} *^\n\n`;
                 incrementMessageCount(simulation, location.name, 1);
                 console.log(`  ✓ ${bot.name} responded`);
 
@@ -384,6 +384,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
           } catch (locationErr) {
             console.error(`Error processing location ${location.name}:`, locationErr);
           }
+          location.transcript = location.transcript + '\n=====End Initial Response=====';
         }
 
         // Update main message with initial response completion
@@ -409,6 +410,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 
         console.log(`Initial Responses complete! Total messages: ${responses}`);
 
+
         // ===== CONVERSATION ROUNDS =====
 
         console.log(`Starting Conversation rounds (${roundCount} rounds)`);
@@ -423,7 +425,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
             const bots = location.bots;
 
             console.log(`Round ${round} at ${location.name}...`);
-            location.transcript = location.transcript + `\n=====Round Responses=====\n\n━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+            location.transcript = location.transcript + `\n\n=====Round Responses=====\n\nRound ${round}\n━━━━━━━━━━━━━━━━━━━━━━━━\n`;
 
             try {
               // Fetch recent messages from this thread to build context
@@ -481,7 +483,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                     },
                   });
 
-                  location.transcript = location.transcript + `${bot.emoji} ${bot.name}\n${responseText}\n\n`;
+                  location.transcript = location.transcript + `^* Name:${bot.name} Personality:${bot.personalityCode}\n${responseText} *^\n\n`;
                   incrementMessageCount(simulation, location.name, 1);
                   console.log(`  ✓ ${bot.name} (Round ${round})`);
 
@@ -603,7 +605,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                 });
 
 
-                location.transcript = location.transcript + `${bot.emoji} ${bot.name}\n${responseText}\n`;
+                location.transcript = location.transcript + `^* Name:${bot.name} Personality:${bot.personalityCode}\n${responseText} *^\n`;
                 incrementMessageCount(simulation, location.name, 1);
                 console.log(`  ✓ ${bot.name} (Final Round)`);
 

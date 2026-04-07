@@ -4,7 +4,7 @@ import {personalities} from "./personalities.js";
 // Prompt for giving agents location setting
 const FROM = "You are a resident of Manteo, North Carolina.";
 // Constraints on response length and detail
-const RESPONSE_DETAIL = "Keep responses relatively concise (2-4 sentences) and at most 2000 characters.";
+const RESPONSE_DETAIL = "Keep responses relatively concise (2-4 sentences) and at most 2000 characters. Do not acknowledge the prompt during generation. Do not include things like < Okay, here’s my response...>";
 // The default weight for locations without a higher probability
 const DEFAULT_WEIGHT = 0.25;
 // The weight for locations with high probability for the bot to be there
@@ -455,5 +455,6 @@ export const TOWN_RESIDENTS = [
   }
 ].map(resident => ({
   ...resident,
+  personalityCode: Object.keys(personalities).find(key => personalities[key] === resident.personality),
   systemPrompt: resident.systemPrompt + ' ' + resident.personality
 }));
