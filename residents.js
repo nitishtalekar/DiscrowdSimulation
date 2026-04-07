@@ -1,3 +1,4 @@
+import {personalities} from "./personalities.js";
 // Town Population - Manteo, NC Residents
 
 // Prompt for giving agents location setting
@@ -19,6 +20,7 @@ export const TOWN_RESIDENTS = [
     name: '👵 Eleanor',
     emoji: '👵',
     role: 'elderly_disabled',
+    personality: personalities.ISFJ,
     locationAffinities: {
       'Beachside Library': HIGH_PROBABILITY,
       'Coastal Community Church': MID_PROBABILITY,
@@ -33,6 +35,7 @@ export const TOWN_RESIDENTS = [
     name: '👴 Harold',
     emoji: '👴',
     role: 'elderly',
+    personality: personalities.ISTJ,
     locationAffinities: {
       'Coastal Community Church': HIGH_PROBABILITY,
       'Beachside Library': MID_PROBABILITY,
@@ -47,6 +50,7 @@ export const TOWN_RESIDENTS = [
     name: '👵 Martha',
     emoji: '👵',
     role: 'elderly',
+    personality: personalities.ESFJ,
     locationAffinities: {
       'Main Street General Store': HIGH_PROBABILITY,
       'Coastal Community Church': MID_PROBABILITY,
@@ -61,6 +65,7 @@ export const TOWN_RESIDENTS = [
     name: '😟 David',
     emoji: '😟',
     role: 'family_caregiver',
+    personality: personalities.INFJ,
     locationAffinities: {
       'Coastal Community Church': HIGH_PROBABILITY,
       'Beachside Library': MID_PROBABILITY,
@@ -75,6 +80,7 @@ export const TOWN_RESIDENTS = [
     name: '🏥 Patricia',
     emoji: '🏥',
     role: 'medical_dependent',
+    personality: personalities.INFP,
     locationAffinities: {
       'Main Street General Store': HIGH_PROBABILITY,
       'Coastal Community Church': MID_PROBABILITY,
@@ -89,6 +95,7 @@ export const TOWN_RESIDENTS = [
     name: '🚶 Robert',
     emoji: '🚶',
     role: 'limited_mobility',
+    personality: personalities.ISTP,
     locationAffinities: {
       'Beachside Library': HIGH_PROBABILITY,
       'Main Street General Store': MID_PROBABILITY,
@@ -103,6 +110,7 @@ export const TOWN_RESIDENTS = [
     name: '🎒 Travis',
     emoji: '🎒',
     role: 'homeless',
+    personality: personalities.ISFP,
     locationAffinities: {
       'Coastal Community Church': HIGH_PROBABILITY,
       'Oceanfront Park & Pier': MID_PROBABILITY,
@@ -117,6 +125,7 @@ export const TOWN_RESIDENTS = [
     name: '🚌 Linda',
     emoji: '🚌',
     role: 'outskirts_resident',
+    personality: personalities.ESFP,
     locationAffinities: {
       'Main Street General Store': HIGH_PROBABILITY,
       'Oceanfront Park & Pier': MID_PROBABILITY,
@@ -131,6 +140,7 @@ export const TOWN_RESIDENTS = [
     name: '📚 Maya',
     emoji: '📚',
     role: 'student',
+    personality: personalities.INTP,
     locationAffinities: {
       'Beachside Library': HIGH_PROBABILITY,
       'Main Street General Store': MID_PROBABILITY,
@@ -145,6 +155,7 @@ export const TOWN_RESIDENTS = [
     name: '🇲🇽 Carlos',
     emoji: '🇲🇽',
     role: 'spanish_speaker',
+    personality: personalities.ESFP,
     locationAffinities: {
       'Coastal Community Church': HIGH_PROBABILITY,
       'Main Street General Store': MID_PROBABILITY,
@@ -159,6 +170,7 @@ export const TOWN_RESIDENTS = [
     name: '🇨🇳 Wei',
     emoji: '🇨🇳',
     role: 'mandarin_speaker',
+    personality: personalities.INFP,
     locationAffinities: {
       'Beachside Library': HIGH_PROBABILITY,
       'Main Street General Store': MID_PROBABILITY,
@@ -173,6 +185,7 @@ export const TOWN_RESIDENTS = [
     name: '🇲🇽 Maria',
     emoji: '🇲🇽',
     role: 'spanish_speaker',
+    personality: personalities.ENFJ,
     locationAffinities: {
       'Coastal Community Church': HIGH_PROBABILITY,
       'Main Street General Store': MID_PROBABILITY,
@@ -187,6 +200,7 @@ export const TOWN_RESIDENTS = [
     name: '🏡 James',
     emoji: '🏡',
     role: 'established_resident',
+    personality: personalities.ESTJ,
     locationAffinities: {
       'The Dockside Diner': HIGH_PROBABILITY,
       'Main Street General Store': MID_PROBABILITY,
@@ -200,6 +214,7 @@ export const TOWN_RESIDENTS = [
     name: '🏡 Barbara',
     emoji: '🏡',
     role: 'established_resident',
+    personality: personalities.ESFJ,
     locationAffinities: {
       'The Dockside Diner': HIGH_PROBABILITY,
       'Coastal Community Church': MID_PROBABILITY,
@@ -213,6 +228,7 @@ export const TOWN_RESIDENTS = [
     name: '🏡 Richard',
     emoji: '🏡',
     role: 'established_resident',
+    personality: personalities.ENTJ,
     locationAffinities: {
       'Harbor Marina': HIGH_PROBABILITY,
       'The Dockside Diner': MID_PROBABILITY,
@@ -226,6 +242,7 @@ export const TOWN_RESIDENTS = [
     name: '🏡 Susan',
     emoji: '🏡',
     role: 'established_resident',
+    personality: personalities.ISFJ,
     locationAffinities: {
       'Main Street General Store': HIGH_PROBABILITY,
       'Coastal Community Church': MID_PROBABILITY,
@@ -240,6 +257,7 @@ export const TOWN_RESIDENTS = [
     name: '👨‍👩‍👧‍👦 Michael',
     emoji: '👨‍👩‍👧‍👦',
     role: 'parent',
+    personality: personalities.ENFJ,
     locationAffinities: {
       'Oceanfront Park & Pier': HIGH_PROBABILITY,
       'Main Street General Store': MID_PROBABILITY,
@@ -253,6 +271,7 @@ export const TOWN_RESIDENTS = [
     name: '👨‍👩‍👧‍👦 Jennifer',
     emoji: '👨‍👩‍👧‍👦',
     role: 'parent',
+    personality: personalities.INFJ,
     locationAffinities: {
       'Oceanfront Park & Pier': HIGH_PROBABILITY,
       'Main Street General Store': MID_PROBABILITY,
@@ -266,6 +285,7 @@ export const TOWN_RESIDENTS = [
     name: '👨‍👩‍👧‍👦 Thomas',
     emoji: '👨‍👩‍👧‍👦',
     role: 'parent',
+    personality: personalities.ISTJ,
     locationAffinities: {
       'Oceanfront Park & Pier': HIGH_PROBABILITY,
       'The Dockside Diner': MID_PROBABILITY,
@@ -280,6 +300,7 @@ export const TOWN_RESIDENTS = [
     name: '🏡 Dorothy',
     emoji: '🏡',
     role: 'established_resident',
+    personality: personalities.INFJ,
     locationAffinities: {
       'Coastal Community Church': HIGH_PROBABILITY,
       'The Dockside Diner': MID_PROBABILITY,
@@ -293,6 +314,7 @@ export const TOWN_RESIDENTS = [
     name: '🏡 William',
     emoji: '🏡',
     role: 'established_resident',
+    personality: personalities.ISTP,
     locationAffinities: {
       'Harbor Marina': HIGH_PROBABILITY,
       'The Dockside Diner': MID_PROBABILITY,
@@ -306,6 +328,7 @@ export const TOWN_RESIDENTS = [
     name: '🏡 Carol',
     emoji: '🏡',
     role: 'established_resident',
+    personality: personalities.ESFJ,
     locationAffinities: {
       'Main Street General Store': HIGH_PROBABILITY,
       'The Dockside Diner': MID_PROBABILITY,
@@ -319,6 +342,7 @@ export const TOWN_RESIDENTS = [
     name: '🏡 George',
     emoji: '🏡',
     role: 'established_resident',
+    personality: personalities.ESTP,
     locationAffinities: {
       'The Dockside Diner': HIGH_PROBABILITY,
       'Harbor Marina': MID_PROBABILITY,
@@ -332,6 +356,7 @@ export const TOWN_RESIDENTS = [
     name: '🏡 Nancy',
     emoji: '🏡',
     role: 'established_resident',
+    personality: personalities.ISFJ,
     locationAffinities: {
       'Coastal Community Church': HIGH_PROBABILITY,
       'Main Street General Store': MID_PROBABILITY,
@@ -346,6 +371,7 @@ export const TOWN_RESIDENTS = [
     name: '🎸 Jake',
     emoji: '🎸',
     role: 'young_resident',
+    personality: personalities.ENTP,
     locationAffinities: {
       'The Dockside Diner': HIGH_PROBABILITY,
       'Oceanfront Park & Pier': MID_PROBABILITY,
@@ -359,6 +385,7 @@ export const TOWN_RESIDENTS = [
     name: '🎸 Ashley',
     emoji: '🎸',
     role: 'young_resident',
+    personality: personalities.INFP,
     locationAffinities: {
       'Oceanfront Park & Pier': HIGH_PROBABILITY,
       'The Dockside Diner': MID_PROBABILITY,
@@ -372,6 +399,7 @@ export const TOWN_RESIDENTS = [
     name: '🎸 Brandon',
     emoji: '🎸',
     role: 'young_resident',
+    personality: personalities.ISFP,
     locationAffinities: {
       'The Dockside Diner': HIGH_PROBABILITY,
       'Oceanfront Park & Pier': MID_PROBABILITY,
@@ -386,6 +414,7 @@ export const TOWN_RESIDENTS = [
     name: '😤 Frank',
     emoji: '😤',
     role: 'storm_skeptic',
+    personality: personalities.ESTP,
     locationAffinities: {
       'The Dockside Diner': HIGH_PROBABILITY,
       'Harbor Marina': MID_PROBABILITY,
@@ -400,6 +429,7 @@ export const TOWN_RESIDENTS = [
     name: '🚫 Dale',
     emoji: '🚫',
     role: 'conspiracy_theorist',
+    personality: personalities.INTJ,
     locationAffinities: {
       'Harbor Marina': HIGH_PROBABILITY,
       'The Dockside Diner': MID_PROBABILITY,
@@ -414,6 +444,7 @@ export const TOWN_RESIDENTS = [
     name: '🏠 Gary',
     emoji: '🏠',
     role: 'protective_homeowner',
+    personality: personalities.ISTJ,
     locationAffinities: {
       'Main Street General Store': HIGH_PROBABILITY,
       'Harbor Marina': MID_PROBABILITY,
@@ -422,4 +453,7 @@ export const TOWN_RESIDENTS = [
     defaultLocationWeight: DEFAULT_WEIGHT,
     systemPrompt: `You are Gary. ${FROM} You have lived here for many years and seen many hurricanes here before. You have a car, money, support, and a family here in Manteo. You are a homeowner and very protective of your house. Evacuating makes you nervous because people could loot or steal from your property. When discussing situations, express worry about leaving your home unprotected. ${RESPONSE_DETAIL}`
   }
-];
+].map(resident => ({
+  ...resident,
+  systemPrompt: resident.systemPrompt + ' ' + resident.personality
+}));
