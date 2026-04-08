@@ -27,7 +27,7 @@ const MODEL = "gemma3:1b";
 // Round Response prompt
 const ROUND_PROMPT = `Respond naturally to what others have said. Engage with their concerns and continue the discussion. Response must be at most 2000 characters. Dont give a preface like -ok heres my response...-, just respond directly like you are in the conversation.`;
 // Final Response prompt
-const FINAL_PROMPT = `By having conversations with others, you’ve been able to get a better idea of how other people are responding and understanding the current emergency weather situation. In 300 characters or less, please explain your current understanding of the emergency weather situation following these discussions, taking into account what you’ve learned from other’s opinions of the topic that you agree with. Dont give a preface like -ok heres my response...-, just respond directly like you are in the conversation.`
+const FINAL_PROMPT = `By having conversations with others, you’ve been able to get a better idea of how other people are responding and understanding the current emergency weather situation. Describe your understanding of the situation in less than 500 characters. Also mention if you're going to evacuate or not. Please explain your current understanding of the emergency weather situation following these discussions, taking into account what you’ve learned from other’s opinions of the topic that you agree with. Dont give a preface like -ok heres my response...-, just respond directly like you are in the conversation.`
 // localhost endpoint for sending messages
 const LOCAL_ENDPOINT = 'http://localhost:11434/api/generate';
 
