@@ -203,7 +203,7 @@ export function formatSimulationSummary(simulation) {
 
   return `🚨 **EMERGENCY SIMULATION**\n` +
          `Simulation ID: ${simulation.id}\n\n` +
-         `**Emergency:** ${simulation.emergencyMessage}\n\n` +
+         `**Emergency:** ${simulation.emergencyMessage.length > 150 ? simulation.emergencyMessage.substring(0, 150) + '...' : simulation.emergencyMessage}\n\n` +
          `**Locations (${simulation.locations.length}):**\n${locationList}\n\n` +
          `**Conversation Rounds:** ${simulation.roundCount}\n` +
          `**Total Residents:** ${simulation.stats.totalBots}\n\n` +
@@ -227,7 +227,7 @@ export function formatCompletionSummary(simulation) {
   const responses = simulation.stats.messagesPosted - simulation.locations.length;
 
   return `🏁 **SIMULATION COMPLETE**\n\n` +
-         `**Emergency:** ${simulation.emergencyMessage}\n\n` +
+         `**Emergency:** ${simulation.emergencyMessage.length > 150 ? simulation.emergencyMessage.substring(0, 150) + '...' : simulation.emergencyMessage}\n\n` +
          `**Final Statistics:**\n${locationStats}\n\n` +
          `**Total Messages:** ${responses}\n` +
          `**Rounds Completed:** ${simulation.stats.roundsCompleted}/${simulation.roundCount}\n` +

@@ -95,6 +95,15 @@ async function createFileAsync(filename, content) {
   }
 }
 
+// Helper to update the main message - silently skips if the token has expired (15 min limit)
+async function safeUpdateMessage(endpoint, content) {
+  try {
+    await DiscordRequest(endpoint, { method: 'PATCH', body: { content } });
+  } catch (err) {
+    console.warn('Could not update main message (token may have expired):', err.message);
+  }
+}
+
 // Store active simulations
 const activeSimulations = new Map();
 
@@ -169,7 +178,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                   style: 2, // Paragraph
                   placeholder: 'Example: Hurricane Category 4 approaching coast. Mandatory evacuation in effect.',
                   min_length: 1,
-                  max_length: 500,
+                  max_length: 2000,
                   required: true,
                 },
               ],
@@ -289,12 +298,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         let finalMessage = `${summary}\n\n**Location Threads:**\n${threadLinks}\n\n` +
                             `✅ Setup complete! Starting emergency response...`;
 
-        await DiscordRequest(getMessageEndpoint, {
-          method: 'PATCH',
-          body: {
-            content: finalMessage,
-          },
-        });
+        await safeUpdateMessage(getMessageEndpoint, finalMessage);
 
         console.log(`Simulation ${simulation.id} setup complete`);
 
@@ -329,7 +333,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
             console.log(`Posted emergency alert to ${location.name}`);
 
             // Small delay to avoid rate limiting
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 250));
 
             // Have each bot respond to the emergency
             for (const bot of bots) {
@@ -399,12 +403,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                                      `**Current Status:**\n${statsText}\n\n` +
                                      `⏳ Starting conversation rounds...`;
 
-        await DiscordRequest(getMessageEndpoint, {
-          method: 'PATCH',
-          body: {
-            content: initialResponseCompleteMessage,
-          },
-        });
+        await safeUpdateMessage(getMessageEndpoint, initialResponseCompleteMessage);
 
         const responses = simulation.stats.messagesPosted - simulation.locations.length;
 
@@ -451,7 +450,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                 .join('\n\n');
 
               // Small delay before starting bot responses
-              await new Promise(resolve => setTimeout(resolve, 500));
+              await new Promise(resolve => setTimeout(resolve, 250));
 
               // Have each bot respond to the conversation
               for (const bot of bots) {
@@ -522,18 +521,13 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                                         ? `⏳ Starting round ${round + 1}...`
                                         : `⏳ Beginning Final Round...`);
 
-          await DiscordRequest(getMessageEndpoint, {
-            method: 'PATCH',
-            body: {
-              content: roundProgressMessage,
-            },
-          });
+          await safeUpdateMessage(getMessageEndpoint, roundProgressMessage);
 
           console.log(`✓ Round ${round}/${roundCount} complete! Total messages: ${simulation.stats.messagesPosted}`);
 
           // Small delay between rounds
           if (round < roundCount) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 300));
           }
         }
 
@@ -572,7 +566,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
               .join('\n\n');
 
             // Small delay before starting bot responses
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 250));
 
             // Have each bot respond to the conversation
             for (const bot of bots) {
@@ -640,12 +634,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                                     `**Total Messages:** ${simulation.stats.messagesPosted}\n\n` +
                                     `⏳ Finalizing Simulation...`;
 
-        await DiscordRequest(getMessageEndpoint, {
-          method: 'PATCH',
-          body: {
-            content: roundProgressMessage,
-          },
-        });
+        await safeUpdateMessage(getMessageEndpoint, roundProgressMessage);
 
         console.log(`✓ Final Round complete! Total messages: ${simulation.stats.messagesPosted}`);
 
@@ -675,12 +664,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                             `✅ All conversations archived in location threads above.\n` +
                             `Thank you for running this emergency simulation!`;
 
-        await DiscordRequest(getMessageEndpoint, {
-          method: 'PATCH',
-          body: {
-            content: finalMessage,
-          },
-        });
+        await safeUpdateMessage(getMessageEndpoint, finalMessage);
 
         console.log(`🏁 Simulation ${simulation.id} complete!`);
         console.log(`   Total messages: ${simulation.stats.messagesPosted}`);

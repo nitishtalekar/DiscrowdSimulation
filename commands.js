@@ -40,9 +40,6 @@ const SIMULATE_COMMAND = {
         { name: '5 rounds', value: 5 },
         { name: '6 rounds', value: 6 },
         { name: '7 rounds', value: 7 },
-        { name: '8 rounds', value: 8 },
-        { name: '9 rounds', value: 9 },
-        { name: '10 rounds', value: 10 },
       ]
     },
   ],
