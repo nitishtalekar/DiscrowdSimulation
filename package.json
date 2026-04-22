@@ -16,6 +16,8 @@
   "author": "Shay DeWael",
   "license": "MIT",
   "dependencies": {
+    "@langchain/community": "^0.3.59",
+    "@langchain/core": "^0.3.80",
     "discord-interactions": "^4.0.0",
     "dotenv": "^16.0.3",
     "express": "^4.18.2"

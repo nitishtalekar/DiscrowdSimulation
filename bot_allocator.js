@@ -2,6 +2,8 @@
 // Bot Allocator - Weighted Random Assignment Algorithm
 // Assigns bots to locations based on personality affinities
 
+import { calculateAffinities } from './affinity_calculator.js';
+
 /**
  * Calculate location weights for a specific bot
  * @param {Object} bot - Bot object with locationAffinities and defaultLocationWeight
@@ -99,7 +101,9 @@ export function assignBotsToLocations(bots, locations) {
     }
 
     // Calculate weights for available locations only
-    const weights = calculateLocationWeights(bot, availableLocations);
+    const { locationAffinities, defaultLocationWeight } = calculateAffinities(bot);
+    const enrichedBot = { ...bot, locationAffinities, defaultLocationWeight };
+    const weights = calculateLocationWeights(enrichedBot, availableLocations);
 
     // Convert to probabilities
     const probabilities = normalizeToProbabilities(weights);

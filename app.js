@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
 import {
-  ButtonStyleTypes,
   InteractionResponseFlags,
   InteractionResponseType,
   InteractionType,
@@ -20,28 +19,36 @@ import {
   setLocationRound,
   formatCompletionSummary
 } from './simulation_engine.js';
+import { buildSystemPrompt } from './prompt_builder.js';
+import { ChatOllama } from '@langchain/community/chat_models/ollama';
+import { SystemMessage, HumanMessage, AIMessage } from '@langchain/core/messages';
 import fs from 'fs/promises';
 
 // Ollama model
-const MODEL = "gemma3:1b";
+const MODEL = 'gemma3:1b';
+// Sliding window size for conversation context passed to the LLM
+const CONTEXT_WINDOW_SIZE = parseInt(process.env.CONTEXT_WINDOW_SIZE ?? '10', 10);
+
+// LangChain Ollama client
+const ollamaClient = new ChatOllama({
+  baseUrl: 'http://localhost:11434',
+  model: MODEL,
+});
+
 // Round Response prompt
-const ROUND_PROMPT = `Respond naturally to what others have said. Engage with their concerns and continue the discussion. Response must be at most 2000 characters. Dont give a preface like -ok heres my response...-, just respond directly like you are in the conversation.`;
+const ROUND_PROMPT = `Respond naturally to what others have said. Engage with their concerns and continue the discussion. Response must be at most 2000 characters. Don't give a preface like -ok here's my response...-, just respond directly like you are in the conversation.`;
 // Final Response prompt
-const FINAL_PROMPT = `By having conversations with others, you’ve been able to get a better idea of how other people are responding and understanding the current emergency weather situation. Describe your understanding of the situation in less than 500 characters. Also mention if you're going to evacuate or not. Please explain your current understanding of the emergency weather situation following these discussions, taking into account what you’ve learned from other’s opinions of the topic that you agree with. Dont give a preface like -ok heres my response...-, just respond directly like you are in the conversation.`
-// localhost endpoint for sending messages
-const LOCAL_ENDPOINT = 'http://localhost:11434/api/generate';
+const FINAL_PROMPT = `By having conversations with others, you've been able to get a better idea of how other people are responding and understanding the current emergency weather situation. Describe your understanding of the situation in less than 500 characters. Also mention if you're going to evacuate or not. Please explain your current understanding of the emergency weather situation following these discussions, taking into account what you've learned from other's opinions of the topic that you agree with. Don't give a preface like -ok here's my response...-, just respond directly like you are in the conversation.`;
 
 // Helper function: Check for XSS and injection attempts
 function validateMessageSecurity(message) {
   const errors = [];
   const lowerMessage = message.toLowerCase();
 
-  // Check for script tags
   if (lowerMessage.includes('<script') || lowerMessage.includes('</script>')) {
     errors.push('Message contains script tags');
   }
 
-  // Check for event handlers
   const eventHandlers = ['onclick', 'onerror', 'onload', 'onmouseover', 'onfocus', 'onblur'];
   for (const handler of eventHandlers) {
     if (lowerMessage.includes(handler)) {
@@ -50,17 +57,14 @@ function validateMessageSecurity(message) {
     }
   }
 
-  // Check for javascript: protocol
   if (lowerMessage.includes('javascript:')) {
     errors.push('Message contains javascript protocol');
   }
 
-  // Check for common XSS patterns
   if (lowerMessage.includes('<iframe') || lowerMessage.includes('<embed') || lowerMessage.includes('<object')) {
     errors.push('Message contains potentially malicious HTML tags');
   }
 
-  // Check for SQL injection patterns
   const sqlPatterns = ['drop table', 'delete from', 'insert into', 'update set', '1=1', '1\'=\'1'];
   for (const pattern of sqlPatterns) {
     if (lowerMessage.includes(pattern)) {
@@ -69,26 +73,21 @@ function validateMessageSecurity(message) {
     }
   }
 
-  return {
-    valid: errors.length === 0,
-    errors
-  };
+  return { valid: errors.length === 0, errors };
 }
-
 
 async function createMyFolder(folderPath) {
   try {
     await fs.mkdir(folderPath, { recursive: true });
     console.log(`Directory created successfully at: ${folderPath}`);
   } catch (err) {
-    // Handle errors, though with 'recursive: true', most mkdir errors are avoided
     console.error('An error occurred:', err);
   }
 }
 
 async function createFileAsync(filename, content) {
   try {
-    await fs.writeFile(filename, content); // This line pauses the function until the file is written
+    await fs.writeFile(filename, content);
     console.log(`File "${filename}" created successfully`);
   } catch (err) {
     console.error('Error writing file:', err);
@@ -104,41 +103,56 @@ async function safeUpdateMessage(endpoint, content) {
   }
 }
 
+/**
+ * Builds a LangChain message array from a shared conversation history.
+ * Applies a sliding window of the last `windowSize` messages before adding the current prompt.
+ * @param {string} systemPromptText - The bot's system prompt
+ * @param {Array<{role, name, content}>} convHistory - Shared location conversation history
+ * @param {number} windowSize - Max number of history messages to include
+ * @param {string} currentPrompt - The prompt for this specific round
+ * @returns {Array} LangChain message array
+ */
+function buildLangChainMessages(systemPromptText, convHistory, windowSize, currentPrompt) {
+  const windowed = convHistory.slice(-windowSize);
+  const messages = [new SystemMessage(systemPromptText)];
+
+  for (const msg of windowed) {
+    if (msg.role === 'user') {
+      messages.push(new HumanMessage(`${msg.name}: ${msg.content}`));
+    } else {
+      messages.push(new AIMessage(`${msg.name}: ${msg.content}`));
+    }
+  }
+
+  messages.push(new HumanMessage(currentPrompt));
+  return messages;
+}
+
 // Store active simulations
 const activeSimulations = new Map();
+// Structured conversation history per simulation per location
+// Map<simulationId, Map<locationName, Array<{role, name, content}>>>
+const locationConversations = new Map();
 
 // Create an express app
 const app = express();
-// Get port, or default to 3000
 const PORT = process.env.PORT || 3000;
-// To keep track of our active games
-const activeGames = {};
 
 /**
  * Interactions endpoint URL where Discord will send HTTP requests
- * Parse request body and verifies incoming requests using discord-interactions package
  */
 app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async function (req, res) {
-  // Interaction id, type and data
   const { id, type, data } = req.body;
 
-  /**
-   * Handle verification requests
-   */
   if (type === InteractionType.PING) {
     return res.send({ type: InteractionResponseType.PONG });
   }
 
-  /**
-   * Handle slash command requests
-   * See https://discord.com/developers/docs/interactions/application-commands#slash-commands
-   */
   if (type === InteractionType.APPLICATION_COMMAND) {
     const { name } = data;
 
     // "test" command
     if (name === 'test') {
-      // Send a message into the channel where command was triggered from
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
@@ -146,7 +160,6 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
           components: [
             {
               type: MessageComponentTypes.TEXT_DISPLAY,
-              // Fetches a random emoji to send from a helper function
               content: `hello world ${getRandomEmoji()}`
             }
           ]
@@ -156,12 +169,9 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 
     // "simulate" command - captures location/round counts, then opens modal for message
     if (name === 'simulate') {
-      // Get the location count and round count from command options
       const locationCount = data.options.find(opt => opt.name === 'locations').value;
       const roundCount = data.options.find(opt => opt.name === 'rounds').value;
 
-      // Open modal for emergency message
-      // We'll include location/round counts in custom_id so we can retrieve them later
       return res.send({
         type: InteractionResponseType.MODAL,
         data: {
@@ -169,13 +179,13 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
           title: 'Emergency Message',
           components: [
             {
-              type: 1, // Action Row
+              type: 1,
               components: [
                 {
-                  type: 4, // Text Input
+                  type: 4,
                   custom_id: 'emergency_message',
                   label: 'What emergency is happening?',
-                  style: 2, // Paragraph
+                  style: 2,
                   placeholder: 'Example: Hurricane Category 4 approaching coast. Mandatory evacuation in effect.',
                   min_length: 1,
                   max_length: 2000,
@@ -188,7 +198,6 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
       });
     }
 
-
     console.error(`unknown command: ${name}`);
     return res.status(400).json({ error: 'unknown command' });
   }
@@ -199,32 +208,26 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
   if (type === InteractionType.MODAL_SUBMIT) {
     const { custom_id, components } = req.body.data;
 
-    // Check if this is our simulation modal
     if (custom_id.startsWith('simulation_modal_')) {
       const channelId = req.body.channel_id;
 
-      // Parse location and round counts from custom_id
       const parts = custom_id.split('_');
       const locationCount = parseInt(parts[2], 10);
       const roundCount = parseInt(parts[3], 10);
 
-      // Extract emergency message
       const emergencyMessage = components[0].components[0].value;
 
-      // Security validation - check for XSS and injection
       const securityCheck = validateMessageSecurity(emergencyMessage);
-
       if (!securityCheck.valid) {
         return res.send({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
             content: `🚫 **Security Validation Failed**\n\nYour message contains potentially malicious content:\n${securityCheck.errors.map(e => `• ${e}`).join('\n')}\n\nPlease remove any HTML tags, scripts, or special characters and try again.`,
-            flags: 64, // Ephemeral
+            flags: 64,
           },
         });
       }
 
-      // Send initial acknowledgment
       res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
@@ -233,18 +236,19 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
       });
 
       try {
-        // Create simulation structure
         const simulation = createSimulation(locationCount, roundCount, emergencyMessage);
         console.log(`Created simulation: ${simulation.id}`);
 
-        // Store simulation for later phases
         activeSimulations.set(simulation.id, simulation);
 
-        // Wait a moment for Discord to process the initial message
+        // Initialize per-location conversation history
+        locationConversations.set(simulation.id, new Map());
+        for (const location of simulation.locations) {
+          locationConversations.get(simulation.id).set(location.name, []);
+        }
+
         await new Promise(resolve => setTimeout(resolve, 500));
 
-
-        // Get the message ID so we can create threads from it
         const getMessageEndpoint = `webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`;
         const messageResponse = await DiscordRequest(getMessageEndpoint, { method: 'GET' });
         const messageData = await messageResponse.json();
@@ -253,72 +257,58 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
           throw new Error('Failed to get message ID');
         }
 
-        const mainMessageId = messageData.id;
-
         // Create a thread for each location
         for (const location of simulation.locations) {
           try {
             const threadName = `${location.emoji} ${location.name} (${location.bots.length} residents)`;
-
-            // Create thread endpoint
             const threadEndpoint = `channels/${channelId}/threads`;
             const threadResponse = await DiscordRequest(threadEndpoint, {
               method: 'POST',
               body: {
-                name: threadName.substring(0, 100), // Discord limit: 100 chars
-                type: 11, // Public thread
-                auto_archive_duration: 1440, // Archive after 24 hours
+                name: threadName.substring(0, 100),
+                type: 11,
+                auto_archive_duration: 1440,
               },
             });
 
             const threadData = await threadResponse.json();
-
-            // Store thread ID in simulation
             setLocationThreadId(simulation, location.name, threadData.id);
-
             console.log(`Created thread for ${location.name}: ${threadData.id}`);
-
           } catch (threadErr) {
             console.error(`Error creating thread for ${location.name}:`, threadErr);
             throw threadErr;
           }
         }
 
-        // Update simulation status
         updateSimulationStatus(simulation, 'ready');
 
-        // Update the main message with summary and thread links
         const summary = formatSimulationSummary(simulation);
-
-        // Build thread links
         const threadLinks = simulation.locations.map(loc =>
           `• <#${loc.threadId}> - ${loc.bots.length} residents`
         ).join('\n');
 
-        let finalMessage = `${summary}\n\n**Location Threads:**\n${threadLinks}\n\n` +
-                            `✅ Setup complete! Starting emergency response...`;
-
-        await safeUpdateMessage(getMessageEndpoint, finalMessage);
+        await safeUpdateMessage(
+          getMessageEndpoint,
+          `${summary}\n\n**Location Threads:**\n${threadLinks}\n\n✅ Setup complete! Starting emergency response...`
+        );
 
         console.log(`Simulation ${simulation.id} setup complete`);
 
-        // create folder for simulation transcript
         createMyFolder(`./Transcripts/${simulation.id}`);
 
         console.log(`Beginning Simulation: Emergency alert and initial responses`);
-
-        // Update simulation status
         updateSimulationStatus(simulation, 'running');
 
-        // Post emergency alert and get initial responses for each location
+        // ===== PHASE 1: INITIAL RESPONSES =====
+
         for (const location of simulation.locations) {
           const threadId = location.threadId;
           const bots = location.bots;
+          const convHistory = locationConversations.get(simulation.id).get(location.name);
 
           console.log(`Processing location: ${location.name} (${bots.length} bots)`);
 
           try {
-            // Post emergency alert to thread
             const alertEndpoint = `channels/${threadId}/messages`;
             await DiscordRequest(alertEndpoint, {
               method: 'POST',
@@ -327,344 +317,212 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
               },
             });
 
-            location.transcript = `=====Transcript Begin=====\n🚨 EMERGENCY ALERT 🚨: ${emergencyMessage}\n\n━━━━━━━━━━━━━━━━━━━━━━━━\n=====Initial Response=====\n━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-
+            // Seed conversation history with the emergency alert
+            convHistory.push({ role: 'user', name: 'EMERGENCY ALERT', content: emergencyMessage });
             incrementMessageCount(simulation, location.name, 1);
             console.log(`Posted emergency alert to ${location.name}`);
 
-            // Small delay to avoid rate limiting
             await new Promise(resolve => setTimeout(resolve, 250));
 
-            // Have each bot respond to the emergency
             for (const bot of bots) {
               try {
-                // Build prompt for bot's initial reaction
-                const botPrompt = `You are in ${location.name} when you receive this emergency alert:\n\n"${emergencyMessage}"\n\nRespond with your immediate reaction and thoughts about what to do. Response must be at most 2000 characters.`;
+                const systemPrompt = buildSystemPrompt(bot);
+                const currentPrompt = `You are in ${location.name} when you receive this emergency alert:\n\n"${emergencyMessage}"\n\nRespond with your immediate reaction and thoughts about what to do. Response must be at most 2000 characters.`;
+                const messages = buildLangChainMessages(systemPrompt, convHistory, CONTEXT_WINDOW_SIZE, currentPrompt);
 
-                // Call Ollama
-                const ollamaResponse = await fetch(LOCAL_ENDPOINT, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    model: MODEL,
-                    prompt: botPrompt,
-                    system: bot.systemPrompt,
-                    stream: false,
-                  }),
-                });
+                const llmResponse = await ollamaClient.invoke(messages);
+                const responseText = llmResponse.content || 'No response';
 
-                const ollamaData = await ollamaResponse.json();
-                const responseText = ollamaData.response || 'No response';
-
-                // Post bot's response to thread
                 await DiscordRequest(alertEndpoint, {
                   method: 'POST',
-                  body: {
-                    content: `**${bot.emoji} ${bot.name}**\n${responseText}`,
-                  },
+                  body: { content: `**${bot.emoji} ${bot.name}**\n${responseText}` },
                 });
 
-                location.transcript = location.transcript + `^* Name:${bot.name} Personality:${bot.personalityCode}\n${responseText} *^\n\n`;
+                convHistory.push({ role: 'assistant', name: bot.name, content: responseText });
                 incrementMessageCount(simulation, location.name, 1);
                 console.log(`  ✓ ${bot.name} responded`);
 
-                // Small delay between bot responses to avoid rate limiting
                 await new Promise(resolve => setTimeout(resolve, 300));
-
               } catch (botErr) {
                 console.error(`  ✗ Error with ${bot.name}:`, botErr.message);
-                // Post error message so we can see what happened
                 await DiscordRequest(alertEndpoint, {
                   method: 'POST',
-                  body: {
-                    content: `**${bot.emoji} ${bot.name}**\n_[Unable to respond]_`,
-                  },
+                  body: { content: `**${bot.emoji} ${bot.name}**\n_[Unable to respond]_` },
                 });
               }
             }
 
             console.log(`✓ Completed initial responses for ${location.name}`);
-
           } catch (locationErr) {
             console.error(`Error processing location ${location.name}:`, locationErr);
           }
-          location.transcript = location.transcript + '\n=====End Initial Response=====';
         }
 
-        // Update main message with initial response completion
         const stats = getSimulationStats(simulation);
         const statsText = simulation.locations.map(loc =>
           `• ${loc.emoji} **${loc.name}**: ${loc.messageCount} messages`
         ).join('\n');
 
-        const initialResponseCompleteMessage = `${summary}\n\n**Location Threads:**\n${threadLinks}\n\n` +
-                                     `✅ Emergency alert posted to all locations!\n` +
-                                     `✅ All ${stats.totalBots} residents have responded!\n\n` +
-                                     `**Current Status:**\n${statsText}\n\n` +
-                                     `⏳ Starting conversation rounds...`;
-
-        await safeUpdateMessage(getMessageEndpoint, initialResponseCompleteMessage);
+        await safeUpdateMessage(
+          getMessageEndpoint,
+          `${summary}\n\n**Location Threads:**\n${threadLinks}\n\n✅ Emergency alert posted to all locations!\n✅ All ${stats.totalBots} residents have responded!\n\n**Current Status:**\n${statsText}\n\n⏳ Starting conversation rounds...`
+        );
 
         const responses = simulation.stats.messagesPosted - simulation.locations.length;
-
         console.log(`Initial Responses complete! Total messages: ${responses}`);
 
-
-        // ===== CONVERSATION ROUNDS =====
+        // ===== PHASE 2: CONVERSATION ROUNDS =====
 
         console.log(`Starting Conversation rounds (${roundCount} rounds)`);
 
-        // Run conversation rounds
         for (let round = 1; round <= roundCount; round++) {
           console.log(`\n=== ROUND ${round}/${roundCount} ===`);
 
-          // Process each location in this round
           for (const location of simulation.locations) {
             const threadId = location.threadId;
             const bots = location.bots;
+            const convHistory = locationConversations.get(simulation.id).get(location.name);
 
             console.log(`Round ${round} at ${location.name}...`);
-            location.transcript = location.transcript + `\n\n=====Round Responses=====\n\nRound ${round}\n━━━━━━━━━━━━━━━━━━━━━━━━\n`;
 
             try {
-              // Fetch recent messages from this thread to build context
-              const messagesEndpoint = `channels/${threadId}/messages?limit=20`;
-              const messagesResponse = await DiscordRequest(messagesEndpoint, { method: 'GET' });
-              const messages = await messagesResponse.json();
-
-              // Reverse so oldest first
-              const recentMessages = messages.reverse();
-
-              // Build conversation context (last 10 messages)
-              const contextMessages = recentMessages.slice(-10);
-              const conversationContext = contextMessages
-                .map(msg => {
-                  // Extract bot name and message
-                  const content = msg.content;
-                  if (content.includes('**') && !content.includes('EMERGENCY ALERT')) {
-                    return content;
-                  }
-                  return null;
-                })
-                .filter(Boolean)
-                .join('\n\n');
-
-              // Small delay before starting bot responses
               await new Promise(resolve => setTimeout(resolve, 250));
 
-              // Have each bot respond to the conversation
               for (const bot of bots) {
                 try {
-                  // Build prompt with conversation context
-                  const contextPrompt = `You are at ${location.name} during an emergency. Here's the recent conversation:\n\n${conversationContext}\n\n${ROUND_PROMPT}`;
+                  const systemPrompt = buildSystemPrompt(bot);
+                  const currentPrompt = `You are at ${location.name} during an emergency. ${ROUND_PROMPT}`;
+                  const messages = buildLangChainMessages(systemPrompt, convHistory, CONTEXT_WINDOW_SIZE, currentPrompt);
 
-                  // Call Ollama
-                  const ollamaResponse = await fetch(LOCAL_ENDPOINT, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      model: MODEL,
-                      prompt: contextPrompt,
-                      system: bot.systemPrompt,
-                      stream: false,
-                    }),
-                  });
+                  const llmResponse = await ollamaClient.invoke(messages);
+                  const responseText = llmResponse.content || 'No response';
 
-                  const ollamaData = await ollamaResponse.json();
-                  const responseText = ollamaData.response || 'No response';
-
-                  // Post bot's response to thread
                   const messageEndpoint = `channels/${threadId}/messages`;
                   await DiscordRequest(messageEndpoint, {
                     method: 'POST',
-                    body: {
-                      content: `**${bot.emoji} ${bot.name}**\n${responseText}`,
-                    },
+                    body: { content: `**${bot.emoji} ${bot.name}**\n${responseText}` },
                   });
 
-                  location.transcript = location.transcript + `^* Name:${bot.name} Personality:${bot.personalityCode}\n${responseText} *^\n\n`;
+                  convHistory.push({ role: 'assistant', name: bot.name, content: responseText });
                   incrementMessageCount(simulation, location.name, 1);
                   console.log(`  ✓ ${bot.name} (Round ${round})`);
 
-                  // Delay between bot responses
                   await new Promise(resolve => setTimeout(resolve, 300));
-
                 } catch (botErr) {
                   console.error(`  ✗ Error with ${bot.name} in round ${round}:`, botErr.message);
                 }
               }
 
-              // Mark this location's round as complete
               setLocationRound(simulation, location.name, round);
               console.log(`✓ Completed round ${round} at ${location.name}`);
-
             } catch (locationErr) {
               console.error(`Error in round ${round} at ${location.name}:`, locationErr);
             }
           }
 
-          // Mark this round as complete
           completeRound(simulation);
 
-          // Update main message with round progress
           const roundStats = simulation.locations.map(loc =>
             `• ${loc.emoji} **${loc.name}**: ${loc.messageCount} messages (Round ${loc.currentRound}/${roundCount})`
           ).join('\n');
 
-          const roundProgressMessage = `${summary}\n\n**Location Threads:**\n${threadLinks}\n\n` +
-                                      `✅ Emergency alert posted!\n` +
-                                      `✅ Initial responses complete!\n` +
-                                      `🔄 **Conversation Round ${round}/${roundCount} complete!**\n\n` +
-                                      `**Current Status:**\n${roundStats}\n\n` +
-                                      `**Total Messages:** ${simulation.stats.messagesPosted}\n\n` +
-                                      (round < roundCount
-                                        ? `⏳ Starting round ${round + 1}...`
-                                        : `⏳ Beginning Final Round...`);
-
-          await safeUpdateMessage(getMessageEndpoint, roundProgressMessage);
+          await safeUpdateMessage(
+            getMessageEndpoint,
+            `${summary}\n\n**Location Threads:**\n${threadLinks}\n\n✅ Emergency alert posted!\n✅ Initial responses complete!\n🔄 **Conversation Round ${round}/${roundCount} complete!**\n\n**Current Status:**\n${roundStats}\n\n**Total Messages:** ${simulation.stats.messagesPosted}\n\n` +
+            (round < roundCount ? `⏳ Starting round ${round + 1}...` : `⏳ Beginning Final Round...`)
+          );
 
           console.log(`✓ Round ${round}/${roundCount} complete! Total messages: ${simulation.stats.messagesPosted}`);
 
-          // Small delay between rounds
           if (round < roundCount) {
             await new Promise(resolve => setTimeout(resolve, 300));
           }
         }
 
-        //========  Final Response ===============
+        // ===== PHASE 3: FINAL ROUND =====
+
         console.log(`\n==Starting Final Round==`);
 
-        // Process each location in this round
         for (const location of simulation.locations) {
           const threadId = location.threadId;
           const bots = location.bots;
+          const convHistory = locationConversations.get(simulation.id).get(location.name);
 
           console.log(`Final Response at ${location.name}...`);
-          location.transcript = location.transcript + `\n=====Final Response=====\n\n━━━━━━━━━━━━━━━━━━━━━━━━\n`;
 
           try {
-            // Fetch recent messages from this thread to build context
-            const messagesEndpoint = `channels/${threadId}/messages?limit=20`;
-            const messagesResponse = await DiscordRequest(messagesEndpoint, { method: 'GET' });
-            const messages = await messagesResponse.json();
-
-            // Reverse so oldest first
-            const recentMessages = messages.reverse();
-
-            // Build conversation context (last 10 messages)
-            const contextMessages = recentMessages.slice(-10);
-            const conversationContext = contextMessages
-              .map(msg => {
-                // Extract bot name and message
-                const content = msg.content;
-                if (content.includes('**') && !content.includes('EMERGENCY ALERT')) {
-                  return content;
-                }
-                return null;
-              })
-              .filter(Boolean)
-              .join('\n\n');
-
-            // Small delay before starting bot responses
             await new Promise(resolve => setTimeout(resolve, 250));
 
-            // Have each bot respond to the conversation
             for (const bot of bots) {
               try {
-                // Build prompt with conversation context
-                const contextPrompt = `You are at ${location.name} during an emergency. Here's the recent conversation:\n\n${conversationContext}\n\n${FINAL_PROMPT}`;
+                const systemPrompt = buildSystemPrompt(bot);
+                const currentPrompt = `You are at ${location.name} during an emergency. ${FINAL_PROMPT}`;
+                const messages = buildLangChainMessages(systemPrompt, convHistory, CONTEXT_WINDOW_SIZE, currentPrompt);
 
-                // Call Ollama
-                const ollamaResponse = await fetch(LOCAL_ENDPOINT, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    model: MODEL,
-                    prompt: contextPrompt,
-                    system: bot.systemPrompt,
-                    stream: false,
-                  }),
-                });
+                const llmResponse = await ollamaClient.invoke(messages);
+                const responseText = llmResponse.content || 'No response';
 
-                const ollamaData = await ollamaResponse.json();
-                const responseText = ollamaData.response || 'No response';
-
-                // Post bot's response to thread
                 const messageEndpoint = `channels/${threadId}/messages`;
                 await DiscordRequest(messageEndpoint, {
                   method: 'POST',
-                  body: {
-                    content: `**${bot.emoji} ${bot.name}**\n${responseText}`,
-                  },
+                  body: { content: `**${bot.emoji} ${bot.name}**\n${responseText}` },
                 });
 
-
-                location.transcript = location.transcript + `^* Name:${bot.name} Personality:${bot.personalityCode}\n${responseText} *^\n`;
+                convHistory.push({ role: 'assistant', name: bot.name, content: responseText });
                 incrementMessageCount(simulation, location.name, 1);
                 console.log(`  ✓ ${bot.name} (Final Round)`);
 
-                // Delay between bot responses
                 await new Promise(resolve => setTimeout(resolve, 300));
-
               } catch (botErr) {
                 console.error(`  ✗ Error with ${bot.name} in final round:`, botErr.message);
               }
             }
 
             console.log(`✓ Completed Final Round at ${location.name}`);
-            location.transcript = location.transcript + `======TRANSCRIPT COMPLETE======`;
-            createFileAsync(`./Transcripts/${simulation.id}/${location.name}`,`${location.transcript}`);
 
+            // Write structured JSON transcript
+            const transcriptData = {
+              simulationId: simulation.id,
+              location: location.name,
+              emergencyMessage: simulation.emergencyMessage,
+              messages: convHistory,
+            };
+            createFileAsync(
+              `./Transcripts/${simulation.id}/${location.name}.json`,
+              JSON.stringify(transcriptData, null, 2)
+            );
           } catch (locationErr) {
             console.error(`Error in Final Round at ${location.name}:`, locationErr);
           }
         }
 
-        // Update main message with round progress
-        const roundStats = simulation.locations.map(loc =>
+        const finalRoundStats = simulation.locations.map(loc =>
           `• ${loc.emoji} **${loc.name}**: ${loc.messageCount} messages (Final Round)`
         ).join('\n');
 
-        const roundProgressMessage = `${summary}\n\n**Location Threads:**\n${threadLinks}\n\n` +
-                                    `✅ Emergency alert posted!\n` +
-                                    `✅ Initial responses complete!\n` +
-                                    `✅ Conversation Round Completed!\n` +
-                                    `🔄 **Final Round in progress!**\n\n` +
-                                    `**Current Status:**\n${roundStats}\n\n` +
-                                    `**Total Messages:** ${simulation.stats.messagesPosted}\n\n` +
-                                    `⏳ Finalizing Simulation...`;
-
-        await safeUpdateMessage(getMessageEndpoint, roundProgressMessage);
+        await safeUpdateMessage(
+          getMessageEndpoint,
+          `${summary}\n\n**Location Threads:**\n${threadLinks}\n\n✅ Emergency alert posted!\n✅ Initial responses complete!\n✅ Conversation Round Completed!\n🔄 **Final Round in progress!**\n\n**Current Status:**\n${finalRoundStats}\n\n**Total Messages:** ${simulation.stats.messagesPosted}\n\n⏳ Finalizing Simulation...`
+        );
 
         console.log(`✓ Final Round complete! Total messages: ${simulation.stats.messagesPosted}`);
 
-
-        // ===== Simulation COMPLETION =====
+        // ===== SIMULATION COMPLETE =====
 
         console.log(`\nAll rounds complete! Finalizing simulation...`);
-
-        // Mark simulation as complete
         updateSimulationStatus(simulation, 'complete');
-
-
-        // Build final completion summary
-        const completionSummary = formatCompletionSummary(simulation);
 
         const finalStats = simulation.locations.map(loc =>
           `• ${loc.emoji} **${loc.name}**: ${loc.messageCount} messages`
         ).join('\n');
 
-        finalMessage = `${summary}\n\n**Location Threads:**\n${threadLinks}\n\n` +
-                            `━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-                            `🏁 **SIMULATION COMPLETE!** 🏁\n\n` +
-                            `**Final Statistics:**\n${finalStats}\n\n` +
-                            `**Total Messages:** ${simulation.stats.messagesPosted}\n` +
-                            `**Rounds Completed:** ${simulation.stats.roundsCompleted}/${roundCount}\n` +
-                            `**Total Residents:** ${simulation.stats.totalBots}\n\n` +
-                            `✅ All conversations archived in location threads above.\n` +
-                            `Thank you for running this emergency simulation!`;
+        await safeUpdateMessage(
+          getMessageEndpoint,
+          `${summary}\n\n**Location Threads:**\n${threadLinks}\n\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n🏁 **SIMULATION COMPLETE!** 🏁\n\n**Final Statistics:**\n${finalStats}\n\n**Total Messages:** ${simulation.stats.messagesPosted}\n**Rounds Completed:** ${simulation.stats.roundsCompleted}/${roundCount}\n**Total Residents:** ${simulation.stats.totalBots}\n\n✅ All conversations archived in location threads above.\nThank you for running this emergency simulation!`
+        );
 
-        await safeUpdateMessage(getMessageEndpoint, finalMessage);
+        // Clean up in-memory conversation store
+        locationConversations.delete(simulation.id);
 
         console.log(`🏁 Simulation ${simulation.id} complete!`);
         console.log(`   Total messages: ${simulation.stats.messagesPosted}`);
@@ -674,7 +532,6 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
       } catch (err) {
         console.error('Simulation creation error:', err);
 
-        // Update message with error
         const getMessageEndpoint = `webhooks/${process.env.APP_ID}/${req.body.token}/messages/@original`;
         await DiscordRequest(getMessageEndpoint, {
           method: 'PATCH',
@@ -687,7 +544,6 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
       return;
     }
   }
-
 
   console.error('unknown interaction type', type);
   return res.status(400).json({ error: 'unknown interaction type' });
