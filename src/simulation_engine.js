@@ -1,9 +1,9 @@
 // Simulation Engine - Creates and manages town emergency simulations
 // Combines location selection, bot allocation, and simulation state
 
-import { getRandomLocations, getTotalCapacity } from './locations.js';
-import { assignBotsToLocations, validateAssignments } from './bot_allocator.js';
-import { TOWN_RESIDENTS } from './residents.js';
+import { getRandomLocations, getTotalCapacity } from './data/locations.js';
+import { assignBotsToLocations, validateAssignments } from './utils/bot_allocator.js';
+import { TOWN_RESIDENTS } from './data/residents.js';
 
 /**
  * Generate a unique simulation ID
