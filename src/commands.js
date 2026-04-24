@@ -21,10 +21,10 @@ const SIMULATE_COMMAND = {
       description: 'Number of locations in the town',
       required: true,
       choices: [
+        { name: '3 locations', value: 3 },
         { name: '4 locations', value: 4 },
         { name: '5 locations', value: 5 },
         { name: '6 locations', value: 6 },
-      // if you add more locations to locations.js, add additional choices. must have at least enough capacity for every bot to be placed
       ]
     },
     {
@@ -40,6 +40,18 @@ const SIMULATE_COMMAND = {
         { name: '5 rounds', value: 5 },
         { name: '6 rounds', value: 6 },
         { name: '7 rounds', value: 7 },
+      ]
+    },
+    {
+      type: 4,
+      name: 'residents',
+      description: 'Number of residents in the simulation',
+      required: true,
+      choices: [
+        { name: '8 residents',  value: 8  },
+        { name: '12 residents', value: 12 },
+        { name: '24 residents', value: 24 },
+        { name: '30 residents', value: 30 },
       ]
     },
   ],

@@ -2,26 +2,29 @@
 
 import { personalities } from '../data/personalities.js';
 
-export const TOWN_CONTEXT = 'You are a resident of Manteo, North Carolina.';
+export const INITIAL_EXTRA = (emergencyMessage) =>
+  `An emergency alert has just been announced: "${emergencyMessage}".Get into the conversation, or start the conversation based on your initial reaction to the alert.`;
 
-export const RESPONSE_CONSTRAINTS = "Keep responses relatively concise (2-4 sentences) and at most 2000 characters. Do not acknowledge the prompt during generation. Do not include things like <Okay, here's my response...>.";
+export const FINAL_EXTRA =
+  `This is the end of the conversation. Say what you've taken away from it — speak directly to the others. At the end of your response include your final evacuation decision: <<YES>> or <<NO>>.`;
 
-export const INITIAL_RESPONSE_PROMPT = (locationName, emergencyMessage) =>
-  `You are in ${locationName} when you receive this emergency alert:\n\n"${emergencyMessage}"\n\nRespond with your immediate reaction and thoughts about what to do. Response must be at most 2000 characters.`;
-
-export const ROUND_PROMPT = (locationName) =>
-  `You are at ${locationName} during an emergency. Respond naturally to what others have said. Engage with their concerns and continue the discussion. Response must be at most 2000 characters. Don't give a preface like -ok here's my response...-, just respond directly like you are in the conversation.`;
-
-export const FINAL_PROMPT = (locationName) =>
-  `You are at ${locationName} during an emergency. By having conversations with others, you've been able to get a better idea of how other people are responding and understanding the current emergency weather situation. Describe your understanding of the situation in less than 500 characters. Also mention if you're going to evacuate or not. Please explain your current understanding of the emergency weather situation following these discussions, taking into account what you've learned from other's opinions of the topic that you agree with. Don't give a preface like -ok here's my response...-, just respond directly like you are in the conversation.`;
-
-export function buildSystemPrompt(resident, townContext = TOWN_CONTEXT) {
+export function buildSystemPrompt(resident, locationName, extraInstruction = '') {
   const personalityDescription = personalities[resident.personality] ?? '';
-  return [
-    `You are ${resident.name}.`,
-    townContext,
-    resident.backstory,
+  const roleLabel = resident.role.replace(/_/g, ' ');
+
+  const parts = [
+    `You are ${resident.name}, a ${roleLabel}.`,
+    `You are in a conversation with other residents at ${locationName} during an emergency.`,
+    `You will respond to the other characters based on your personality.`,
+    `ALWAYS respond like you are talking to the people around you. DO NOT GREET EVERY TIME.`,
     personalityDescription,
-    RESPONSE_CONSTRAINTS,
-  ].join(' ');
+    `This is your backstory: ${resident.backstory}.`,
+    `Respond as part of a natural conversation. DO NOT ADD ACTIONS OR STAGE DIRECTIONS. DO NOT SAY "I THINK" OR "I FEEL". JUST SAY WHAT YOU THINK AND FEEL AS IF YOU ARE TALKING TO THE OTHER RESIDENTS. SPEAK ONLY AS YOURSELF AND REPOND ONLY IN TEXT RESPONSE. MAKE SURE YOUR RESPONSES ARE SHORT AS PART OF A CONVERSATION AND NOT LONG MONOLOGUES.`,
+  ];
+
+  if (extraInstruction) {
+    parts.push(extraInstruction);
+  }
+
+  return parts.join(' ');
 }

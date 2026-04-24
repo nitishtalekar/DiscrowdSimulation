@@ -18,7 +18,7 @@ import {
   completeRound,
   setLocationRound,
 } from './simulation_engine.js';
-import { buildSystemPrompt, INITIAL_RESPONSE_PROMPT, ROUND_PROMPT, FINAL_PROMPT } from './utils/prompts.js';
+import { buildSystemPrompt, INITIAL_EXTRA, FINAL_EXTRA } from './utils/prompts.js';
 import { MODEL, OLLAMA_BASE_URL, DISCORD_MESSAGES } from './utils/constants.js';
 import { ChatOllama } from '@langchain/community/chat_models/ollama';
 import { SystemMessage, HumanMessage, AIMessage } from '@langchain/core/messages';
@@ -93,23 +93,38 @@ async function safeUpdateMessage(endpoint, content) {
 }
 
 /**
- * Builds a LangChain message array from shared conversation history.
- * Applies a sliding window of the last `windowSize` messages, then appends the current prompt.
+ * Flips HumanMessage ↔ AIMessage so the current speaker sees all prior messages
+ * from its own perspective (it is the assistant; everyone else is the human).
  */
-function buildLangChainMessages(systemPromptText, convHistory, windowSize, currentPrompt) {
-  const windowed = convHistory.slice(-windowSize);
-  const messages = [new SystemMessage(systemPromptText)];
+function swapRoles(messages) {
+  return messages.map(msg => {
+    if (msg instanceof HumanMessage) return new AIMessage(msg.content);
+    if (msg instanceof AIMessage) return new HumanMessage(msg.content);
+    return msg;
+  });
+}
 
-  for (const msg of windowed) {
-    if (msg.role === 'user') {
-      messages.push(new HumanMessage(`${msg.name}: ${msg.content}`));
-    } else {
-      messages.push(new AIMessage(`${msg.name}: ${msg.content}`));
-    }
+/**
+ * Builds a LangChain message array from shared conversation history.
+ * Applies a sliding window, swaps roles so the current speaker's perspective is correct,
+ * and seeds an empty history with a neutral opener so the LLM always has a human turn to respond to.
+ */
+function buildLangChainMessages(systemPromptText, convHistory, windowSize) {
+  const windowed = convHistory.slice(-windowSize);
+
+  let history;
+  if (windowed.length === 0) {
+    history = [new HumanMessage('The emergency alert has just come in.')];
+  } else {
+    history = windowed.map(msg =>
+      msg.role === 'user'
+        ? new HumanMessage(`${msg.name}: ${msg.content}`)
+        : new AIMessage(`${msg.name}: ${msg.content}`)
+    );
   }
 
-  messages.push(new HumanMessage(currentPrompt));
-  return messages;
+  const swapped = swapRoles(history);
+  return [new SystemMessage(systemPromptText), ...swapped];
 }
 
 const activeSimulations = new Map();
@@ -147,11 +162,12 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
     if (name === 'simulate') {
       const locationCount = data.options.find(opt => opt.name === 'locations').value;
       const roundCount = data.options.find(opt => opt.name === 'rounds').value;
+      const residentCount = data.options.find(opt => opt.name === 'residents').value;
 
       return res.send({
         type: InteractionResponseType.MODAL,
         data: {
-          custom_id: `simulation_modal_${locationCount}_${roundCount}`,
+          custom_id: `simulation_modal_${locationCount}_${roundCount}_${residentCount}`,
           title: 'Emergency Message',
           components: [
             {
@@ -184,8 +200,10 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
     if (custom_id.startsWith('simulation_modal_')) {
       const channelId = req.body.channel_id;
       const parts = custom_id.split('_');
+      // parts: ['simulation', 'modal', locationCount, roundCount, residentCount]
       const locationCount = parseInt(parts[2], 10);
       const roundCount = parseInt(parts[3], 10);
+      const residentCount = parseInt(parts[4], 10);
       const emergencyMessage = components[0].components[0].value;
 
       const securityCheck = validateMessageSecurity(emergencyMessage);
@@ -207,7 +225,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
       });
 
       try {
-        const simulation = createSimulation(locationCount, roundCount, emergencyMessage);
+        const simulation = createSimulation(locationCount, roundCount, emergencyMessage, residentCount);
         console.log(`Created simulation: ${simulation.id}`);
 
         activeSimulations.set(simulation.id, simulation);
@@ -285,9 +303,8 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 
             for (const bot of bots) {
               try {
-                const systemPrompt = buildSystemPrompt(bot);
-                const currentPrompt = INITIAL_RESPONSE_PROMPT(location.name, emergencyMessage);
-                const messages = buildLangChainMessages(systemPrompt, convHistory, CONTEXT_WINDOW_SIZE, currentPrompt);
+                const systemPrompt = buildSystemPrompt(bot, location.name, INITIAL_EXTRA(emergencyMessage));
+                const messages = buildLangChainMessages(systemPrompt, convHistory, CONTEXT_WINDOW_SIZE);
 
                 const llmResponse = await ollamaClient.invoke(messages);
                 const responseText = llmResponse.content || 'No response';
@@ -346,9 +363,8 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 
               for (const bot of bots) {
                 try {
-                  const systemPrompt = buildSystemPrompt(bot);
-                  const currentPrompt = ROUND_PROMPT(location.name);
-                  const messages = buildLangChainMessages(systemPrompt, convHistory, CONTEXT_WINDOW_SIZE, currentPrompt);
+                  const systemPrompt = buildSystemPrompt(bot, location.name);
+                  const messages = buildLangChainMessages(systemPrompt, convHistory, CONTEXT_WINDOW_SIZE);
 
                   const llmResponse = await ollamaClient.invoke(messages);
                   const responseText = llmResponse.content || 'No response';
@@ -409,9 +425,8 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 
             for (const bot of bots) {
               try {
-                const systemPrompt = buildSystemPrompt(bot);
-                const currentPrompt = FINAL_PROMPT(location.name);
-                const messages = buildLangChainMessages(systemPrompt, convHistory, CONTEXT_WINDOW_SIZE, currentPrompt);
+                const systemPrompt = buildSystemPrompt(bot, location.name, FINAL_EXTRA);
+                const messages = buildLangChainMessages(systemPrompt, convHistory, CONTEXT_WINDOW_SIZE);
 
                 const llmResponse = await ollamaClient.invoke(messages);
                 const responseText = llmResponse.content || 'No response';

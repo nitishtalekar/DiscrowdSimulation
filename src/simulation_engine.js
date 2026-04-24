@@ -19,29 +19,33 @@ function generateSimulationId() {
  * @param {string} emergencyMessage - The emergency alert message
  * @returns {Object} Simulation object with locations and bot assignments
  */
-export function createSimulation(locationCount, roundCount, emergencyMessage) {
+export function createSimulation(locationCount, roundCount, emergencyMessage, residentCount) {
   // Generate unique ID
   const simulationId = generateSimulationId();
 
   // Select random locations (no duplicates)
   const selectedLocations = getRandomLocations(locationCount);
 
+  // Randomly sample residentCount residents from the full pool
+  const shuffledResidents = [...TOWN_RESIDENTS].sort(() => Math.random() - 0.5);
+  const selectedResidents = shuffledResidents.slice(0, residentCount);
+
   // Check capacity
   const capacity = getTotalCapacity(selectedLocations);
-  const botCount = TOWN_RESIDENTS.length;
+  const botCount = selectedResidents.length;
 
   if (botCount > capacity.max) {
     throw new Error(
-      `Not enough capacity: ${botCount} bots need ${capacity.min}-${capacity.max} total capacity. ` +
-      `Consider using more locations.`
+      `Not enough capacity: ${botCount} residents need up to ${capacity.max} total capacity across ` +
+      `${locationCount} locations. Try more locations or fewer residents.`
     );
   }
 
   // Assign bots to locations
-  const assignments = assignBotsToLocations(TOWN_RESIDENTS, selectedLocations);
+  const assignments = assignBotsToLocations(selectedResidents, selectedLocations);
 
   // Validate assignments
-  const validation = validateAssignments(assignments, TOWN_RESIDENTS, selectedLocations);
+  const validation = validateAssignments(assignments, selectedResidents, selectedLocations);
   if (!validation.valid) {
     throw new Error(`Bot assignment validation failed: ${validation.errors.join(', ')}`);
   }
