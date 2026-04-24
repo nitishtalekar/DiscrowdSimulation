@@ -25,6 +25,21 @@ import { SystemMessage, HumanMessage, AIMessage } from '@langchain/core/messages
 import fs from 'fs/promises';
 
 const CONTEXT_WINDOW_SIZE = parseInt(process.env.CONTEXT_WINDOW_SIZE ?? '10', 10);
+const DISCORD_MAX_LENGTH = 2000;
+
+function sanitizeResponse(text) {
+  // Strip leading punctuation-only lines (e.g. a lone "." the LLM emits before the real response)
+  let result = text.replace(/^[\s]*[^\w\s<«"'(]+\n+/, '').trim();
+
+  // Truncate at the first line where the LLM starts roleplaying another character (e.g. "David:  ...")
+  const scriptBreak = result.search(/\n[A-Z][a-zA-Z]+:/);
+  if (scriptBreak !== -1) {
+    console.warn('[sanitizeResponse] Truncated multi-character script output');
+    result = result.slice(0, scriptBreak).trim();
+  }
+
+  return result.length > DISCORD_MAX_LENGTH ? result.slice(0, DISCORD_MAX_LENGTH) : result;
+}
 
 const ollamaClient = new ChatOllama({
   baseUrl: OLLAMA_BASE_URL,
@@ -307,7 +322,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                 const messages = buildLangChainMessages(systemPrompt, convHistory, CONTEXT_WINDOW_SIZE);
 
                 const llmResponse = await ollamaClient.invoke(messages);
-                const responseText = llmResponse.content || 'No response';
+                const responseText = sanitizeResponse(llmResponse.content || 'No response');
 
                 await DiscordRequest(`channels/${threadId}/messages`, {
                   method: 'POST',
@@ -367,7 +382,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                   const messages = buildLangChainMessages(systemPrompt, convHistory, CONTEXT_WINDOW_SIZE);
 
                   const llmResponse = await ollamaClient.invoke(messages);
-                  const responseText = llmResponse.content || 'No response';
+                  const responseText = sanitizeResponse(llmResponse.content || 'No response');
 
                   await DiscordRequest(`channels/${threadId}/messages`, {
                     method: 'POST',
@@ -429,7 +444,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
                 const messages = buildLangChainMessages(systemPrompt, convHistory, CONTEXT_WINDOW_SIZE);
 
                 const llmResponse = await ollamaClient.invoke(messages);
-                const responseText = llmResponse.content || 'No response';
+                const responseText = sanitizeResponse(llmResponse.content || 'No response');
 
                 await DiscordRequest(`channels/${threadId}/messages`, {
                   method: 'POST',
